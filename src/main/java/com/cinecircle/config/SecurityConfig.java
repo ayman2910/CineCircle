@@ -22,8 +22,12 @@ public class SecurityConfig {
     @Bean
     public UserDetailsService userDetailsService(UserRepository userRepository) {
         return email -> {
-            User user = userRepository.findByEmail(email)
-                    .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
+            String normalizedEmail = UserRepository.normalizeEmail(email);
+            if (normalizedEmail == null || normalizedEmail.isEmpty()) {
+                throw new UsernameNotFoundException("User not found");
+            }
+            User user = userRepository.findByEmail(normalizedEmail)
+                    .orElseThrow(() -> new UsernameNotFoundException("User not found: " + normalizedEmail));
             return org.springframework.security.core.userdetails.User.builder()
                     .username(user.getEmail())
                     .password(user.getPasswordHash())

@@ -6,6 +6,7 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 @Repository
@@ -15,6 +16,13 @@ public class UserRepository {
 
     public UserRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
+    }
+
+    /**
+     * Normalizes an email address by trimming surrounding whitespace and lowercasing with {@link Locale#ROOT}.
+     */
+    public static String normalizeEmail(String email) {
+        return email == null ? null : email.trim().toLowerCase(Locale.ROOT);
     }
 
     private final RowMapper<User> userRowMapper = (rs, rowNum) -> {
@@ -32,7 +40,14 @@ public class UserRepository {
     };
 
     public Optional<User> findByEmail(String email) {
-        List<User> users = jdbcTemplate.query("SELECT * FROM users WHERE email = ?", userRowMapper, email);
+        String normalizedEmail = normalizeEmail(email);
+        if (normalizedEmail == null || normalizedEmail.isEmpty()) {
+            return Optional.empty();
+        }
+        List<User> users = jdbcTemplate.query(
+                "SELECT * FROM users WHERE LOWER(TRIM(email)) = ?",
+                userRowMapper,
+                normalizedEmail);
         return users.stream().findFirst();
     }
 
@@ -46,8 +61,10 @@ public class UserRepository {
     }
 
     public void save(User user) {
+        String normalizedEmail = normalizeEmail(user.getEmail());
+        user.setEmail(normalizedEmail);
         String sql = "INSERT INTO users (name, email, password_hash, role, trust_score) VALUES (?, ?, ?, ?, ?)";
-        jdbcTemplate.update(sql, user.getName(), user.getEmail(), user.getPasswordHash(),
+        jdbcTemplate.update(sql, user.getName(), normalizedEmail, user.getPasswordHash(),
                 user.getRole() != null ? user.getRole() : "VIEWER", 100);
     }
 }

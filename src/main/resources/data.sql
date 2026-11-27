@@ -1,9 +1,9 @@
 -- Seed Users (Password for all test accounts is: password123)
 INSERT INTO users (name, email, password_hash, role, trust_score) VALUES
-('Hossain Ayman', 'ayman@cinecircle.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'ADMIN', 100),
-('Suhaila Obdhi', 'obdhi@cinecircle.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'MODERATOR', 100),
-('Noshin Noor', 'noshin@cinecircle.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'HOST', 100),
-('Amir Abrar Akib', 'amir@cinecircle.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'VIEWER', 100)
+('Hossain Ayman', 'ayman@cinecircle.com', '$2a$10$pDw4qdkndd/DVNVsEGdj8eCMyGOuUXyWFBvFV8hsh1riYMcsw8UwS', 'ADMIN', 100),
+('Suhaila Obdhi', 'obdhi@cinecircle.com', '$2a$10$pDw4qdkndd/DVNVsEGdj8eCMyGOuUXyWFBvFV8hsh1riYMcsw8UwS', 'MODERATOR', 100),
+('Noshin Noor', 'noshin@cinecircle.com', '$2a$10$pDw4qdkndd/DVNVsEGdj8eCMyGOuUXyWFBvFV8hsh1riYMcsw8UwS', 'HOST', 100),
+('Amir Abrar Akib', 'amir@cinecircle.com', '$2a$10$pDw4qdkndd/DVNVsEGdj8eCMyGOuUXyWFBvFV8hsh1riYMcsw8UwS', 'VIEWER', 100)
 ON CONFLICT (email) DO NOTHING;
 
 -- Seed User Subscriptions

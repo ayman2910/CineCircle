@@ -17,12 +17,16 @@ public class AuthService {
     }
 
     public boolean registerUser(String name, String email, String rawPassword) {
-        if (userRepository.findByEmail(email).isPresent()) {
+        String normalizedEmail = UserRepository.normalizeEmail(email);
+        if (normalizedEmail == null || normalizedEmail.isEmpty()) {
+            return false;
+        }
+        if (userRepository.findByEmail(normalizedEmail).isPresent()) {
             return false;
         }
         User user = new User();
-        user.setName(name);
-        user.setEmail(email);
+        user.setName(name != null ? name.trim() : null);
+        user.setEmail(normalizedEmail);
         user.setPasswordHash(passwordEncoder.encode(rawPassword));
         user.setRole("VIEWER");
         userRepository.save(user);
