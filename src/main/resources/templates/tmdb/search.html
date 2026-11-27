@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Search &amp; Import from TMDB — CineCircle</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <link rel="stylesheet" th:href="@{/css/tmdb-search.css}">
+</head>
+<body>
+    <div th:replace="~{fragments/navbar :: navbar}"></div>
+
+    <main class="container">
+        <header class="tmdb-header">
+            <div>
+                <h1>Search &amp; Import from TMDB</h1>
+                <p>Find any movie or TV series live on TMDB and add it directly to the CineCircle catalog.</p>
+            </div>
+            <a th:href="@{/}" class="btn-outline">&larr; Back to Catalog</a>
+        </header>
+
+        <form th:action="@{/tmdb/search}" method="get" class="tmdb-search-bar">
+            <input type="text"
+                   name="q"
+                   th:value="${q}"
+                   placeholder="Search movies or TV series (e.g., Interstellar, Breaking Bad)..."
+                   aria-label="Search query"
+                   required>
+            <select name="type" aria-label="Media type">
+                <option value="ALL" th:selected="${type == 'ALL'}">All</option>
+                <option value="MOVIE" th:selected="${type == 'MOVIE'}">Movies</option>
+                <option value="TV" th:selected="${type == 'TV'}">TV Series</option>
+            </select>
+            <button type="submit" class="btn-primary">Search TMDB</button>
+        </form>
+
+        <div th:if="${successMessage}" class="tmdb-flash tmdb-flash-success" th:text="${successMessage}"></div>
+        <div th:if="${infoMessage}" class="tmdb-flash tmdb-flash-info" th:text="${infoMessage}"></div>
+        <div th:if="${errorMessage}" class="tmdb-flash tmdb-flash-error" th:text="${errorMessage}"></div>
+
+        <section th:if="${#strings.isEmpty(q)}" class="tmdb-empty-state">
+            <p>Enter a movie or TV series title above to search TMDB live.</p>
+        </section>
+
+        <section th:if="${!#strings.isEmpty(q) and #lists.isEmpty(results)}" class="tmdb-empty-state">
+            <p>No matching movies or TV series found on TMDB for &ldquo;<span th:text="${q}">query</span>&rdquo;.</p>
+        </section>
+
+        <section th:if="${!#lists.isEmpty(results)}">
+            <p class="tmdb-results-count">
+                Showing <span th:text="${#lists.size(results)}">0</span> results for
+                &ldquo;<span th:text="${q}">query</span>&rdquo;
+            </p>
+            <div class="tmdb-grid">
+                <article class="tmdb-card" th:each="item : ${results}">
+                    <div class="tmdb-poster-wrap">
+                        <img th:if="${item.posterPath != null and !#strings.isEmpty(item.posterPath)}"
+                             th:src="'https://image.tmdb.org/t/p/w500' + ${item.posterPath}"
+                             th:alt="${item.title}"
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"/>
+                        <div class="poster-placeholder"
+                             th:style="${item.posterPath != null and !#strings.isEmpty(item.posterPath)} ? 'display:none;' : 'display:flex;'">
+                            <span>No Poster</span>
+                        </div>
+                    </div>
+
+                    <div class="tmdb-card-body">
+                        <div class="tmdb-badges">
+                            <span class="badge" th:text="${item.mediaType}">MOVIE</span>
+                            <span class="badge badge-year" th:if="${item.releaseYear != null}" th:text="${item.releaseYear}">2024</span>
+                        </div>
+
+                        <h3 class="tmdb-card-title" th:text="${item.title}">Title</h3>
+                        <p class="tmdb-overview"
+                           th:text="${item.overview != null and !#strings.isEmpty(item.overview)} ? ${item.overview} : 'No overview available on TMDB.'">
+                            Overview
+                        </p>
+
+                        <div class="tmdb-card-actions">
+                            <span th:if="${existingTmdbIds != null and existingTmdbIds.contains(item.tmdbId)}"
+                                  class="badge-existing">
+                                Already in Catalog
+                            </span>
+                            <form th:unless="${existingTmdbIds != null and existingTmdbIds.contains(item.tmdbId)}"
+                                  th:action="@{/tmdb/import}"
+                                  method="post"
+                                  class="import-form">
+                                <input type="hidden" name="tmdbId" th:value="${item.tmdbId}">
+                                <input type="hidden" name="mediaType" th:value="${item.mediaType}">
+                                <input type="hidden" name="q" th:value="${q}">
+                                <input type="hidden" name="type" th:value="${type}">
+                                <button type="submit" class="btn-import">+ Add to CineCircle</button>
+                            </form>
+                        </div>
+                    </div>
+                </article>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

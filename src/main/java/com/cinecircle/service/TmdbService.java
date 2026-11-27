@@ -15,6 +15,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -81,6 +82,76 @@ public class TmdbService {
     }
 
     /**
+     * Searches TMDB v3 ({@code /search/movie}, {@code /search/tv}, or {@code /search/multi})
+     * and returns up to 16 lightweight {@link MediaItem} results.
+     */
+    public List<MediaItem> searchTmdb(String query, String type) {
+        if (!hasValidConfig() || query == null || query.isBlank()) {
+            return List.of();
+        }
+        String normalizedType = type == null ? "ALL" : type.trim().toUpperCase(Locale.ROOT);
+        String searchSegment;
+        if ("MOVIE".equals(normalizedType)) {
+            searchSegment = "movie";
+        } else if ("TV".equals(normalizedType) || "SERIES".equals(normalizedType)) {
+            searchSegment = "tv";
+        } else {
+            searchSegment = "multi";
+        }
+
+        try {
+            URI uri = UriComponentsBuilder.fromUriString(normalizedBaseUrl())
+                    .pathSegment("search", searchSegment)
+                    .queryParam("api_key", "{apiKey}")
+                    .queryParam("query", "{query}")
+                    .encode()
+                    .buildAndExpand(Map.of("apiKey", apiKey.trim(), "query", query.trim()))
+                    .toUri();
+
+            Map<String, Object> response = getJsonMap(uri, "search/" + searchSegment);
+            Object resultsObj = response.get("results");
+            if (!(resultsObj instanceof List<?> results)) {
+                return List.of();
+            }
+
+            List<MediaItem> items = new ArrayList<>();
+            for (Object entry : results) {
+                if (items.size() >= 16) {
+                    break;
+                }
+                if (!(entry instanceof Map<?, ?> resultMap)) {
+                    continue;
+                }
+                MediaItem item = mapSearchResult(resultMap, searchSegment);
+                if (item != null) {
+                    items.add(item);
+                }
+            }
+            return items;
+        } catch (Exception ex) {
+            log.warn("TMDB live search failed for type={}, query='{}': {}", searchSegment, query, ex.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * Fetches full metadata for a single movie or TV show from {@code /movie/{id}} or {@code /tv/{id}}.
+     */
+    public Optional<MediaItem> fetchFullMediaDetails(String tmdbId, String mediaType) {
+        if (!hasValidConfig() || tmdbId == null || tmdbId.isBlank()) {
+            return Optional.empty();
+        }
+        boolean isTv = isTvTypeString(mediaType);
+        String mediaSegment = isTv ? "tv" : "movie";
+        String dbMediaType = isTv ? "SERIES" : "MOVIE";
+        String cleanId = stripKnownPrefix(tmdbId.trim());
+        if (cleanId.isEmpty()) {
+            return Optional.empty();
+        }
+        return fetchAndMapDetail(mediaSegment, cleanId, truncate(tmdbId.trim(), 50), dbMediaType);
+    }
+
+    /**
      * Fetches popular Movies and TV Series from TMDB v3 across {@code 1..3} pages
      * and hydrates each entry from its detail endpoint.
      */
@@ -131,25 +202,87 @@ public class TmdbService {
                 continue;
             }
 
-            try {
-                URI detailUri = UriComponentsBuilder.fromUriString(normalizedBaseUrl())
-                        .pathSegment(mediaSegment, rawId)
-                        .queryParam("api_key", "{apiKey}")
-                        .encode()
-                        .buildAndExpand(Map.of("apiKey", apiKey.trim()))
-                        .toUri();
-                Map<String, Object> detail = getJsonMap(detailUri, mediaSegment + "/" + rawId);
-                if (detail.isEmpty()) {
-                    continue;
-                }
-                MediaItem item = mapDetailToMediaItem(detail, dbTmdbId, mediaType);
-                if (item != null) {
-                    catalog.add(item);
-                }
-            } catch (Exception ex) {
-                log.warn("Failed to map TMDB {} id={}: {}", mediaSegment, rawId, ex.getMessage());
-            }
+            fetchAndMapDetail(mediaSegment, rawId, dbTmdbId, mediaType).ifPresent(catalog::add);
         }
+    }
+
+    private Optional<MediaItem> fetchAndMapDetail(String mediaSegment,
+                                                  String rawTmdbId,
+                                                  String dbTmdbId,
+                                                  String dbMediaType) {
+        try {
+            URI detailUri = UriComponentsBuilder.fromUriString(normalizedBaseUrl())
+                    .pathSegment(mediaSegment, rawTmdbId)
+                    .queryParam("api_key", "{apiKey}")
+                    .encode()
+                    .buildAndExpand(Map.of("apiKey", apiKey.trim()))
+                    .toUri();
+            Map<String, Object> detail = getJsonMap(detailUri, mediaSegment + "/" + rawTmdbId);
+            if (detail.isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.ofNullable(mapDetailToMediaItem(detail, dbTmdbId, dbMediaType));
+        } catch (Exception ex) {
+            log.warn("Failed to map TMDB {} id={}: {}", mediaSegment, rawTmdbId, ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private MediaItem mapSearchResult(Map<?, ?> entry, String searchSegment) {
+        String kind;
+        if ("multi".equals(searchSegment)) {
+            String rawMediaType = firstNonBlankString(entry.get("media_type"));
+            if (rawMediaType == null) {
+                return null;
+            }
+            String lower = rawMediaType.toLowerCase(Locale.ROOT);
+            if (!"movie".equals(lower) && !"tv".equals(lower)) {
+                return null;
+            }
+            kind = lower;
+        } else {
+            kind = searchSegment;
+        }
+
+        String idStr = extractIdString(entry.get("id"));
+        if (idStr == null || idStr.isBlank()) {
+            return null;
+        }
+
+        boolean isTv = "tv".equals(kind);
+        String title = isTv
+                ? firstNonBlankString(entry.get("name"), entry.get("original_name"))
+                : firstNonBlankString(entry.get("title"), entry.get("original_title"));
+        if (title == null) {
+            return null;
+        }
+
+        MediaItem item = new MediaItem();
+        item.setTmdbId(truncate(idStr, 50));
+        item.setTitle(truncate(title, 200));
+        item.setMediaType(isTv ? "SERIES" : "MOVIE");
+        item.setReleaseYear(extractReleaseYear(isTv ? entry.get("first_air_date") : entry.get("release_date")));
+        item.setPosterPath(truncate(extractPosterPath(entry), 255));
+        item.setOverview(firstNonBlankString(entry.get("overview")));
+        return item;
+    }
+
+    private boolean isTvTypeString(String mediaType) {
+        if (mediaType == null) {
+            return false;
+        }
+        String type = mediaType.trim().toUpperCase(Locale.ROOT);
+        return "SERIES".equals(type) || "TV".equals(type);
+    }
+
+    private String stripKnownPrefix(String tmdbId) {
+        if (tmdbId.startsWith("tv-")) {
+            return tmdbId.substring(3);
+        }
+        if (tmdbId.startsWith("movie-")) {
+            return tmdbId.substring(6);
+        }
+        return tmdbId;
     }
 
     private String resolveDbTmdbId(String rawId, String mediaSegment, Set<String> seenTmdbIds) {

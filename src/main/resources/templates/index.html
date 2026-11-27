@@ -15,7 +15,10 @@
         </header>
 
         <section>
-            <h2 class="section-title">Featured Catalog</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem;">
+                <h2 class="section-title" style="margin-bottom: 0;">Featured Catalog</h2>
+                <a th:href="@{/tmdb/search}" class="btn-primary">Search &amp; Import from TMDB</a>
+            </div>
             <div class="media-grid">
                 <div class="media-card" th:each="item : ${mediaList}">
                     <img th:src="${item.posterPath != null and !#strings.isEmpty(item.posterPath)} ? (${#strings.startsWith(item.posterPath, 'http')} ? ${item.posterPath} : 'https://image.tmdb.org/t/p/w500' + ${item.posterPath}) : 'https://via.placeholder.com/300x450/1e293b/94a3b8?text=Poster'"
