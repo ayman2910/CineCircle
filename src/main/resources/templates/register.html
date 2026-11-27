@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Sign Up — CineCircle</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+    <div th:replace="~{fragments/navbar :: navbar}"></div>
+    <main class="auth-container">
+        <h2>Join CineCircle</h2>
+        <p th:if="${error}" class="alert-error" th:text="${error}"></p>
+        <form th:action="@{/register}" method="post" class="auth-form">
+            <label>Full Name</label>
+            <input type="text" name="name" required placeholder="Your Name">
+            <label>Email</label>
+            <input type="email" name="email" required placeholder="you@example.com">
+            <label>Password</label>
+            <input type="password" name="password" required minlength="6">
+            <button type="submit" class="btn-primary full-width">Create Account</button>
+        </form>
+    </main>
+</body>
+</html>
