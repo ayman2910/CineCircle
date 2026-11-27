@@ -46,4 +46,8 @@ public class MediaItemRepository {
     public List<MediaItem> findByType(String mediaType) {
         return jdbcTemplate.query("SELECT * FROM media_items WHERE media_type = ? ORDER BY title", mediaRowMapper, mediaType);
     }
+
+    public void updatePosterPath(Long id, String posterPath) {
+        jdbcTemplate.update("UPDATE media_items SET poster_path = ? WHERE id = ?", posterPath, id);
+    }
 }
