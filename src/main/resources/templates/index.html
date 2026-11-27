@@ -18,7 +18,7 @@
             <h2 class="section-title">Featured Catalog</h2>
             <div class="media-grid">
                 <div class="media-card" th:each="item : ${mediaList}">
-                    <img th:src="'https://image.tmdb.org/t/p/w500' + ${item.posterPath}"
+                    <img th:src="${item.posterPath != null and !#strings.isEmpty(item.posterPath)} ? (${#strings.startsWith(item.posterPath, 'http')} ? ${item.posterPath} : 'https://image.tmdb.org/t/p/w500' + ${item.posterPath}) : 'https://via.placeholder.com/300x450/1e293b/94a3b8?text=Poster'"
                          th:alt="${item.title}"
                          onerror="this.src='https://via.placeholder.com/300x450/1e293b/94a3b8?text=Poster'"/>
                     <div class="card-body">
