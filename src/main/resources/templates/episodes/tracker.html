@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${detail.series.title} + ' — Episode Tracker | CineCircle'">Episode Tracker — CineCircle</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <link rel="stylesheet" th:href="@{/css/f7-episodes.css}">
+    <script th:src="@{/js/f7-episodes.js}" defer></script>
+</head>
+<body>
+    <div th:replace="~{fragments/navbar :: navbar}"></div>
+
+    <main class="container f7-page">
+        <div class="f7-breadcrumb-row">
+            <a th:href="@{/episodes}" class="f7-back-link">&larr; Back to My Series</a>
+        </div>
+
+        <div th:if="${successMessage}" class="f7-flash f7-flash-success" th:text="${successMessage}"></div>
+        <div th:if="${warningMessage}" class="f7-flash f7-flash-warning" th:text="${warningMessage}"></div>
+        <div th:if="${errorMessage}" class="f7-flash f7-flash-error" th:text="${errorMessage}"></div>
+
+        <section class="f7-hero">
+            <div class="f7-hero-poster">
+                <img th:if="${detail.resolvedPosterUrl != null}"
+                     th:src="${detail.resolvedPosterUrl}"
+                     th:alt="${detail.series.title}"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"/>
+                <div class="f7-poster-fallback"
+                     th:style="${detail.resolvedPosterUrl != null} ? 'display:none;' : 'display:flex;'">
+                    <span class="f7-poster-kicker">TV SERIES</span>
+                    <span class="f7-poster-fallback-title" th:text="${detail.series.title}">Title</span>
+                </div>
+            </div>
+
+            <div class="f7-hero-content">
+                <div class="f7-badge-row">
+                    <span class="f7-status-badge"
+                          th:classappend="'f7-status-' + ${#strings.toLowerCase(detail.progress.watchStatus)}"
+                          th:text="${#strings.replace(detail.progress.watchStatus, '_', ' ')}">WATCHING</span>
+                    <span class="f7-checkpoint-pill"
+                          th:text="'Checkpoint: ' + ${detail.progress.checkpointLabel}">Checkpoint: Not started</span>
+                    <span class="f7-meta-pill" th:if="${detail.series.releaseYear != null}"
+                          th:text="${detail.series.releaseYear}">2020</span>
+                    <span class="f7-meta-pill" th:text="${detail.series.genre}">Genre</span>
+                </div>
+
+                <h1 class="f7-hero-title" th:text="${detail.series.title}">Series Title</h1>
+                <p class="f7-hero-overview"
+                   th:if="${detail.series.overview != null and !#strings.isEmpty(detail.series.overview)}"
+                   th:text="${detail.series.overview}">Overview</p>
+
+                <div class="f7-kpi-grid">
+                    <div class="f7-kpi-card">
+                        <span class="f7-kpi-label">Progress</span>
+                        <strong class="f7-kpi-value" th:text="${detail.stats.completionPercent} + '%'">0%</strong>
+                        <span class="f7-kpi-sub"
+                              th:text="${detail.stats.watchedEpisodes} + ' / ' + ${detail.stats.totalEpisodes} + ' episodes'">0 / 0 episodes</span>
+                        <div class="f7-progress-track f7-kpi-progress">
+                            <div class="f7-progress-fill"
+                                 th:classappend="${detail.stats.completed} ? ' is-complete' : ''"
+                                 th:style="'width:' + ${detail.stats.completionPercent} + '%'"></div>
+                        </div>
+                    </div>
+
+                    <div class="f7-kpi-card">
+                        <span class="f7-kpi-label">Time Remaining</span>
+                        <strong class="f7-kpi-value" th:text="${detail.stats.formattedRemainingTime}">0m</strong>
+                        <span class="f7-kpi-sub"
+                              th:text="${detail.stats.watchedMinutes >= 60 ? (detail.stats.watchedMinutes / 60) + 'h ' + (detail.stats.watchedMinutes % 60) + 'm watched' : detail.stats.watchedMinutes + 'm watched'}">
+                            0m watched
+                        </span>
+                    </div>
+
+                    <div class="f7-kpi-card"
+                         th:classappend="${detail.stats.overdue ? ' is-overdue' : (detail.stats.completed ? ' is-completed' : '')}">
+                        <span class="f7-kpi-label">Daily Binge Pace</span>
+                        <strong class="f7-kpi-value f7-kpi-value-sm"
+                                th:text="${detail.stats.paceSummaryLabel}">Set a target date</strong>
+                        <span class="f7-kpi-sub"
+                              th:if="${detail.stats.daysRemaining != null and detail.stats.daysRemaining >= 0 and !detail.stats.completed}"
+                              th:text="${detail.stats.daysRemaining == 0 ? 'Target date is today' : detail.stats.daysRemaining + ' day(s) until target'}">
+                            Target info
+                        </span>
+                        <span class="f7-kpi-sub"
+                              th:if="${detail.stats.daysRemaining == null and !detail.stats.completed}">
+                            Pick a target finish date below
+                        </span>
+                    </div>
+
+                    <div class="f7-kpi-card f7-kpi-next">
+                        <span class="f7-kpi-label">Next Up</span>
+                        <strong class="f7-kpi-value f7-kpi-value-sm"
+                                th:if="${detail.nextEpisode != null}"
+                                th:text="${detail.nextEpisode.formattedCode} + ' — ' + ${detail.nextEpisode.title}">
+                            S01E01 — Pilot
+                        </strong>
+                        <strong class="f7-kpi-value f7-kpi-value-sm"
+                                th:if="${detail.nextEpisode == null and detail.hasEpisodes}">
+                            All caught up!
+                        </strong>
+                        <strong class="f7-kpi-value f7-kpi-value-sm"
+                                th:if="${detail.nextEpisode == null and !detail.hasEpisodes}">
+                            No episodes cached
+                        </strong>
+                        <form th:if="${detail.nextEpisode != null}"
+                              th:action="@{/episodes/{id}/next(id=${detail.series.id})}"
+                              method="post"
+                              class="f7-next-form">
+                            <input type="hidden" name="returnTo" value="tracker">
+                            <button type="submit" class="f7-btn f7-btn-primary f7-btn-sm f7-btn-full">
+                                +1 Mark Next Watched
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="f7-controls-bar">
+            <form th:action="@{/episodes/{id}/settings(id=${detail.series.id})}"
+                  method="post"
+                  class="f7-settings-form">
+                <div class="f7-field">
+                    <label for="f7-watch-status">Watch Status</label>
+                    <select id="f7-watch-status" name="watchStatus" class="f7-select">
+                        <option value="WATCHING" th:selected="${detail.progress.watchStatus == 'WATCHING'}">Watching</option>
+                        <option value="ON_HOLD" th:selected="${detail.progress.watchStatus == 'ON_HOLD'}">On Hold</option>
+                        <option value="DROPPED" th:selected="${detail.progress.watchStatus == 'DROPPED'}">Dropped</option>
+                        <option value="COMPLETED" th:selected="${detail.progress.watchStatus == 'COMPLETED'}">Completed</option>
+                    </select>
+                </div>
+
+                <div class="f7-field">
+                    <label for="f7-target-date">Target Finish Date</label>
+                    <input id="f7-target-date"
+                           type="date"
+                           name="targetFinishDate"
+                           class="f7-input"
+                           th:value="${detail.progress.targetFinishDate != null ? #temporals.format(detail.progress.targetFinishDate, 'yyyy-MM-dd') : ''}">
+                </div>
+
+                <button type="submit" class="f7-btn f7-btn-primary">Save Pace &amp; Status</button>
+            </form>
+
+            <div class="f7-actions-group">
+                <form th:if="${detail.canSyncFromTmdb}"
+                      th:action="@{/episodes/{id}/sync(id=${detail.series.id})}"
+                      method="post"
+                      class="f7-inline-form">
+                    <button type="submit" class="f7-btn f7-btn-accent-outline">Sync Episodes from TMDB</button>
+                </form>
+
+                <form th:action="@{/episodes/{id}/reset(id=${detail.series.id})}"
+                      method="post"
+                      class="f7-inline-form"
+                      data-confirm="Reset episode progress back to zero?">
+                    <button type="submit"
+                            class="f7-btn f7-btn-secondary"
+                            data-confirm="Reset episode progress back to zero?">Reset Progress</button>
+                </form>
+
+                <form th:action="@{/episodes/{id}/remove(id=${detail.series.id})}"
+                      method="post"
+                      class="f7-inline-form"
+                      data-confirm="Remove this show from your tracker?">
+                    <button type="submit"
+                            class="f7-btn f7-btn-danger-outline"
+                            data-confirm="Remove this show from your tracker?">Stop Tracking</button>
+                </form>
+            </div>
+        </section>
+
+        <section class="f7-section">
+            <div th:if="${!detail.hasEpisodes}" class="f7-empty-card f7-empty-episodes">
+                <h2>No Episodes Cached Locally Yet</h2>
+                <p th:if="${detail.canSyncFromTmdb}">
+                    This series doesn&rsquo;t have episodes saved in the local database yet. Pull all seasons &amp; episode runtimes straight from TMDB to unlock your checklist and binge-pace math.
+                </p>
+                <p th:unless="${detail.canSyncFromTmdb}">
+                    This series has no local episodes cached and does not have a numeric TMDB ID configured for automatic syncing.
+                </p>
+                <form th:if="${detail.canSyncFromTmdb}"
+                      th:action="@{/episodes/{id}/sync(id=${detail.series.id})}"
+                      method="post"
+                      class="f7-inline-form">
+                    <button type="submit" class="f7-btn f7-btn-primary">Sync Episodes from TMDB</button>
+                </form>
+            </div>
+
+            <div th:if="${detail.hasEpisodes}">
+                <div class="f7-seasons-toolbar">
+                    <h2 class="f7-section-title">Seasons &amp; Episodes</h2>
+                    <div class="f7-toolbar-btns">
+                        <button type="button" class="f7-btn f7-btn-secondary f7-btn-sm" data-f7-expand-all>Expand All</button>
+                        <button type="button" class="f7-btn f7-btn-secondary f7-btn-sm" data-f7-collapse-all>Collapse All</button>
+                    </div>
+                </div>
+
+                <div class="f7-seasons-list"
+                     th:with="activeSeasonNum=${detail.nextEpisode != null ? detail.nextEpisode.seasonNumber : (detail.progress.highestEpisode > 0 ? detail.progress.highestSeason : detail.seasons[0].seasonNumber)}">
+                    <article class="f7-season-card"
+                             th:each="season : ${detail.seasons}"
+                             th:with="isDefaultOpen=${season.seasonNumber == activeSeasonNum}"
+                             th:classappend="${!isDefaultOpen} ? ' is-collapsed' : ''">
+                        <button type="button"
+                                class="f7-season-toggle"
+                                th:attr="aria-expanded=${isDefaultOpen}">
+                            <span class="f7-season-left">
+                                <span class="f7-season-chevron" aria-hidden="true">&#9662;</span>
+                                <span class="f7-season-name" th:text="'Season ' + ${season.seasonNumber}">Season 1</span>
+                                <span th:if="${season.fullyWatched}" class="f7-season-done-pill">Completed</span>
+                            </span>
+                            <span class="f7-season-right">
+                                <span class="f7-season-count"
+                                      th:text="${season.watchedInSeason} + ' / ' + ${season.totalInSeason} + ' eps'">0 / 8 eps</span>
+                                <span class="f7-season-runtime"
+                                      th:text="${season.totalMinutesInSeason >= 60 ? (season.totalMinutesInSeason / 60) + 'h ' + (season.totalMinutesInSeason % 60) + 'm' : season.totalMinutesInSeason + 'm'}">
+                                    3h 12m
+                                </span>
+                            </span>
+                        </button>
+
+                        <div class="f7-season-body">
+                            <div class="f7-episode-row"
+                                 th:each="epView : ${season.episodes}"
+                                 th:classappend="${epView.currentCheckpoint ? ' is-watched is-checkpoint' : (epView.watched ? ' is-watched' : '')}">
+                                <div class="f7-ep-info">
+                                    <span class="f7-ep-code" th:text="${epView.episode.formattedCode}">S01E01</span>
+                                    <span class="f7-ep-title" th:text="${epView.episode.title}">Pilot</span>
+                                </div>
+                                <div class="f7-ep-actions">
+                                    <span class="f7-ep-runtime" th:text="${epView.episode.runtimeMinutes} + 'm'">45m</span>
+                                    <form th:action="@{/episodes/{id}/check(id=${detail.series.id})}"
+                                          method="post"
+                                          class="f7-inline-form">
+                                        <input type="hidden" name="seasonNumber" th:value="${epView.episode.seasonNumber}">
+                                        <input type="hidden" name="episodeNumber" th:value="${epView.episode.episodeNumber}">
+                                        <button type="submit"
+                                                class="f7-check-btn"
+                                                th:classappend="${epView.currentCheckpoint ? ' is-current' : (epView.watched ? ' is-watched' : '')}"
+                                                th:text="${epView.currentCheckpoint ? '✓ Current (Undo)' : (epView.watched ? '✓ Watched' : 'Mark up to here')}">
+                                            Mark up to here
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

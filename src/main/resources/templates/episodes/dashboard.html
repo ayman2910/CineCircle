@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TV Series Episode Tracker — CineCircle</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <link rel="stylesheet" th:href="@{/css/f7-episodes.css}">
+</head>
+<body>
+    <div th:replace="~{fragments/navbar :: navbar}"></div>
+
+    <main class="container f7-page">
+        <div th:if="${successMessage}" class="f7-flash f7-flash-success" th:text="${successMessage}"></div>
+        <div th:if="${warningMessage}" class="f7-flash f7-flash-warning" th:text="${warningMessage}"></div>
+        <div th:if="${errorMessage}" class="f7-flash f7-flash-error" th:text="${errorMessage}"></div>
+
+        <header class="f7-header">
+            <div>
+                <h1>TV Series Episode Tracker</h1>
+                <p class="f7-subtitle">
+                    Tracking
+                    <strong th:text="${statusCounts != null ? (statusCounts['ALL'] ?: 0) : 0}">0</strong>
+                    series with live episode checkpoints &amp; binge-pace targets.
+                </p>
+            </div>
+            <div class="f7-header-actions">
+                <a th:href="@{/tmdb/search(type='TV')}" class="f7-btn f7-btn-secondary">+ Import TV Series</a>
+            </div>
+        </header>
+
+        <nav class="f7-filter-bar" aria-label="Filter tracked series by watch status">
+            <a th:href="@{/episodes(status='ALL')}"
+               class="f7-filter-pill"
+               th:classappend="${activeStatus == 'ALL'} ? ' is-active' : ''">
+                <span>All</span>
+                <span class="f7-pill-count" th:text="${statusCounts != null ? (statusCounts['ALL'] ?: 0) : 0}">0</span>
+            </a>
+            <a th:href="@{/episodes(status='WATCHING')}"
+               class="f7-filter-pill"
+               th:classappend="${activeStatus == 'WATCHING'} ? ' is-active' : ''">
+                <span>Watching</span>
+                <span class="f7-pill-count" th:text="${statusCounts != null ? (statusCounts['WATCHING'] ?: 0) : 0}">0</span>
+            </a>
+            <a th:href="@{/episodes(status='ON_HOLD')}"
+               class="f7-filter-pill"
+               th:classappend="${activeStatus == 'ON_HOLD'} ? ' is-active' : ''">
+                <span>On Hold</span>
+                <span class="f7-pill-count" th:text="${statusCounts != null ? (statusCounts['ON_HOLD'] ?: 0) : 0}">0</span>
+            </a>
+            <a th:href="@{/episodes(status='COMPLETED')}"
+               class="f7-filter-pill"
+               th:classappend="${activeStatus == 'COMPLETED'} ? ' is-active' : ''">
+                <span>Completed</span>
+                <span class="f7-pill-count" th:text="${statusCounts != null ? (statusCounts['COMPLETED'] ?: 0) : 0}">0</span>
+            </a>
+            <a th:href="@{/episodes(status='DROPPED')}"
+               class="f7-filter-pill"
+               th:classappend="${activeStatus == 'DROPPED'} ? ' is-active' : ''">
+                <span>Dropped</span>
+                <span class="f7-pill-count" th:text="${statusCounts != null ? (statusCounts['DROPPED'] ?: 0) : 0}">0</span>
+            </a>
+        </nav>
+
+        <section class="f7-section">
+            <div class="f7-section-head">
+                <h2 class="f7-section-title">My Tracked Series</h2>
+            </div>
+
+            <div th:if="${#lists.isEmpty(trackedSeries)}" class="f7-empty-card">
+                <p th:if="${activeStatus == 'ALL'}">
+                    You aren&rsquo;t tracking any TV series yet. Pick a show from &ldquo;Browse &amp; Start Tracking&rdquo; below to log your first episode!
+                </p>
+                <p th:unless="${activeStatus == 'ALL'}">
+                    No tracked series found with status
+                    <strong th:text="${#strings.replace(activeStatus, '_', ' ')}">WATCHING</strong>.
+                </p>
+                <a th:unless="${activeStatus == 'ALL'}"
+                   th:href="@{/episodes(status='ALL')}"
+                   class="f7-btn f7-btn-secondary">Show All Tracked Series</a>
+            </div>
+
+            <div th:if="${!#lists.isEmpty(trackedSeries)}" class="f7-series-grid">
+                <article class="f7-series-card" th:each="item : ${trackedSeries}">
+                    <a th:href="@{/episodes/{id}(id=${item.series.id})}" class="f7-card-poster">
+                        <img th:if="${item.resolvedPosterUrl != null}"
+                             th:src="${item.resolvedPosterUrl}"
+                             th:alt="${item.series.title}"
+                             loading="lazy"
+                             decoding="async"
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"/>
+                        <div class="f7-poster-fallback"
+                             th:style="${item.resolvedPosterUrl != null} ? 'display:none;' : 'display:flex;'">
+                            <span class="f7-poster-kicker">TV SERIES</span>
+                            <span class="f7-poster-fallback-title" th:text="${item.series.title}">Title</span>
+                        </div>
+                    </a>
+
+                    <div class="f7-card-body">
+                        <div class="f7-badge-row">
+                            <span class="f7-status-badge"
+                                  th:classappend="'f7-status-' + ${#strings.toLowerCase(item.progress.watchStatus)}"
+                                  th:text="${#strings.replace(item.progress.watchStatus, '_', ' ')}">WATCHING</span>
+                            <span class="f7-checkpoint-pill"
+                                  th:text="${item.progress.checkpointLabel}">S01E01</span>
+                        </div>
+
+                        <h3 class="f7-card-title">
+                            <a th:href="@{/episodes/{id}(id=${item.series.id})}"
+                               th:text="${item.series.title}">Series Title</a>
+                        </h3>
+
+                        <p class="f7-card-meta">
+                            <span th:text="${item.series.genre}">Genre</span>
+                            <span th:if="${item.series.releaseYear != null}">
+                                &bull; <span th:text="${item.series.releaseYear}">2020</span>
+                            </span>
+                        </p>
+
+                        <div class="f7-progress-block">
+                            <div class="f7-progress-track">
+                                <div class="f7-progress-fill"
+                                     th:classappend="${item.stats.completed} ? ' is-complete' : ''"
+                                     th:style="'width:' + ${item.stats.completionPercent} + '%'"></div>
+                            </div>
+                            <div class="f7-progress-meta">
+                                <span th:text="${item.stats.watchedEpisodes} + ' / ' + ${item.stats.totalEpisodes} + ' eps'">0 / 0 eps</span>
+                                <span th:text="${item.stats.completed ? 'Done' : item.stats.formattedRemainingTime + ' left'}">0m left</span>
+                            </div>
+                        </div>
+
+                        <div class="f7-pace-badge"
+                             th:classappend="${item.stats.overdue ? ' is-overdue' : (item.stats.completed ? ' is-completed' : '')}"
+                             th:text="${item.stats.paceSummaryLabel}">
+                            Pace summary
+                        </div>
+
+                        <div class="f7-card-actions">
+                            <form th:if="${item.nextEpisode != null}"
+                                  th:action="@{/episodes/{id}/next(id=${item.series.id})}"
+                                  method="post"
+                                  class="f7-inline-form">
+                                <input type="hidden" name="returnTo" value="dashboard">
+                                <button type="submit"
+                                        class="f7-btn f7-btn-primary f7-btn-full"
+                                        th:text="'+1 Next (' + ${item.nextEpisode.formattedCode} + ')'">+1 Next</button>
+                            </form>
+                            <a th:href="@{/episodes/{id}(id=${item.series.id})}"
+                               class="f7-btn f7-btn-secondary f7-btn-full">Open Tracker</a>
+                        </div>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="f7-section f7-untracked-section">
+            <div class="f7-section-head">
+                <h2 class="f7-section-title">Browse &amp; Start Tracking</h2>
+                <span class="f7-muted-note"
+                      th:text="${#lists.size(untrackedSeries)} + ' available'">0 available</span>
+            </div>
+
+            <div th:if="${#lists.isEmpty(untrackedSeries)}" class="f7-empty-card">
+                <p>You are already tracking every TV series currently in the CineCircle catalog!</p>
+                <a th:href="@{/tmdb/search(type='TV')}" class="f7-btn f7-btn-primary">Import More Series from TMDB</a>
+            </div>
+
+            <div th:if="${!#lists.isEmpty(untrackedSeries)}" class="f7-untracked-grid">
+                <article class="f7-untracked-card" th:each="item : ${untrackedSeries}">
+                    <a th:href="@{/episodes/{id}(id=${item.series.id})}" class="f7-untracked-poster">
+                        <img th:if="${item.resolvedPosterUrl != null}"
+                             th:src="${item.resolvedPosterUrl}"
+                             th:alt="${item.series.title}"
+                             loading="lazy"
+                             decoding="async"
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"/>
+                        <div class="f7-poster-fallback f7-poster-fallback-compact"
+                             th:style="${item.resolvedPosterUrl != null} ? 'display:none;' : 'display:flex;'">
+                            <span class="f7-poster-kicker">TV</span>
+                            <span class="f7-poster-fallback-title" th:text="${item.series.title}">Title</span>
+                        </div>
+                    </a>
+
+                    <div class="f7-untracked-body">
+                        <h3 class="f7-untracked-title">
+                            <a th:href="@{/episodes/{id}(id=${item.series.id})}"
+                               th:text="${item.series.title}">Series Title</a>
+                        </h3>
+                        <p class="f7-card-meta">
+                            <span th:text="${item.series.genre}">Genre</span>
+                            <span th:if="${item.series.releaseYear != null}">
+                                &bull; <span th:text="${item.series.releaseYear}">2020</span>
+                            </span>
+                        </p>
+                        <div class="f7-untracked-footer">
+                            <span class="f7-ep-count-badge"
+                                  th:classappend="${item.stats.totalEpisodes == 0 ? ' is-unsynced' : ''}"
+                                  th:text="${item.stats.totalEpisodes > 0 ? item.stats.totalEpisodes + ' eps' : 'Not synced yet'}">
+                                Not synced yet
+                            </span>
+                            <form th:action="@{/episodes/{id}/track(id=${item.series.id})}"
+                                  method="post"
+                                  class="f7-inline-form">
+                                <button type="submit" class="f7-btn f7-btn-primary f7-btn-sm">Start Tracking</button>
+                            </form>
+                        </div>
+                    </div>
+                </article>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

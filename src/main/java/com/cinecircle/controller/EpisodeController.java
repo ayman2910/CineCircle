@@ -7,6 +7,7 @@ import com.cinecircle.model.User;
 import com.cinecircle.repository.EpisodeRepository;
 import com.cinecircle.repository.UserRepository;
 import com.cinecircle.service.EpisodeService;
+import com.cinecircle.service.EpisodeService.DashboardViewData;
 import com.cinecircle.service.EpisodeTmdbSyncService;
 import com.cinecircle.service.EpisodeTmdbSyncService.SyncResult;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -50,12 +51,12 @@ public class EpisodeController {
                             Principal principal,
                             Model model) {
         User currentUser = resolveCurrentUser(principal);
-        String activeStatus = episodeService.normalizeStatusFilter(status);
+        DashboardViewData dashboard = episodeService.getDashboardData(currentUser.getId(), status);
 
-        model.addAttribute("trackedSeries", episodeService.getTrackedSeries(currentUser.getId(), activeStatus));
-        model.addAttribute("untrackedSeries", episodeService.getUntrackedSeries(currentUser.getId()));
-        model.addAttribute("activeStatus", activeStatus);
-        model.addAttribute("statusCounts", episodeService.getStatusCounts(currentUser.getId()));
+        model.addAttribute("trackedSeries", dashboard.getTrackedSeries());
+        model.addAttribute("untrackedSeries", dashboard.getUntrackedSeries());
+        model.addAttribute("activeStatus", dashboard.getActiveStatus());
+        model.addAttribute("statusCounts", dashboard.getStatusCounts());
         return "episodes/dashboard";
     }
 
@@ -100,14 +101,14 @@ public class EpisodeController {
                                           Principal principal,
                                           RedirectAttributes redirectAttributes) {
         User currentUser = resolveCurrentUser(principal);
-        if (episodeRepository.findSeriesById(seriesId).isEmpty()) {
+        Optional<EpisodeProgress> updated = episodeService.toggleEpisodeCheckpointAndGet(
+                currentUser.getId(), seriesId, seasonNumber, episodeNumber);
+        if (updated.isEmpty() && !episodeRepository.seriesExists(seriesId)) {
             redirectAttributes.addFlashAttribute("errorMessage", "TV series not found.");
             return "redirect:/episodes";
         }
 
-        episodeService.toggleEpisodeCheckpoint(currentUser.getId(), seriesId, seasonNumber, episodeNumber);
-        Optional<EpisodeProgress> updated = episodeRepository.findProgressByUserAndSeries(currentUser.getId(), seriesId);
-        String label = updated.map(EpisodeProgress::getCheckpointLabel).orElse("updated");
+        String label = updated.map(EpisodeProgress::getCheckpointLabel).orElse("unchanged");
         redirectAttributes.addFlashAttribute("successMessage", "Checkpoint updated: " + label + ".");
         return resolveReturnRedirect(seriesId, returnTo);
     }
@@ -118,13 +119,12 @@ public class EpisodeController {
                                      Principal principal,
                                      RedirectAttributes redirectAttributes) {
         User currentUser = resolveCurrentUser(principal);
-        if (episodeRepository.findSeriesById(seriesId).isEmpty()) {
+        Optional<EpisodeProgress> updated = episodeService.advanceNextEpisodeAndGet(currentUser.getId(), seriesId);
+        if (updated.isEmpty() && !episodeRepository.seriesExists(seriesId)) {
             redirectAttributes.addFlashAttribute("errorMessage", "TV series not found.");
             return "redirect:/episodes";
         }
 
-        episodeService.advanceNextEpisode(currentUser.getId(), seriesId);
-        Optional<EpisodeProgress> updated = episodeRepository.findProgressByUserAndSeries(currentUser.getId(), seriesId);
         String label = updated.map(EpisodeProgress::getCheckpointLabel).orElse("Not started");
         redirectAttributes.addFlashAttribute("successMessage", "Progress updated to " + label + ".");
         return resolveReturnRedirect(seriesId, returnTo);
@@ -138,12 +138,11 @@ public class EpisodeController {
                                  Principal principal,
                                  RedirectAttributes redirectAttributes) {
         User currentUser = resolveCurrentUser(principal);
-        if (episodeRepository.findSeriesById(seriesId).isEmpty()) {
+        if (!episodeService.updateSettingsIfSeriesExists(currentUser.getId(), seriesId, watchStatus, targetFinishDate)) {
             redirectAttributes.addFlashAttribute("errorMessage", "TV series not found.");
             return "redirect:/episodes";
         }
 
-        episodeService.updateStatusAndTargetDate(currentUser.getId(), seriesId, watchStatus, targetFinishDate);
         redirectAttributes.addFlashAttribute("successMessage", "Watch status and target finish date saved.");
         return "redirect:/episodes/" + seriesId;
     }
@@ -173,12 +172,11 @@ public class EpisodeController {
                                 Principal principal,
                                 RedirectAttributes redirectAttributes) {
         User currentUser = resolveCurrentUser(principal);
-        if (episodeRepository.findSeriesById(seriesId).isEmpty()) {
+        if (!episodeService.resetProgressIfSeriesExists(currentUser.getId(), seriesId)) {
             redirectAttributes.addFlashAttribute("errorMessage", "TV series not found.");
             return "redirect:/episodes";
         }
 
-        episodeService.resetProgress(currentUser.getId(), seriesId);
         redirectAttributes.addFlashAttribute("successMessage", "Progress reset to Not started.");
         return "redirect:/episodes/" + seriesId;
     }

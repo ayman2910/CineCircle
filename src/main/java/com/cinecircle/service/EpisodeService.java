@@ -9,6 +9,7 @@ import com.cinecircle.model.EpisodeViewModels.SeriesTrackerDetail;
 import com.cinecircle.model.EpisodeViewModels.SeriesTrackerSummary;
 import com.cinecircle.model.MediaItem;
 import com.cinecircle.repository.EpisodeRepository;
+import com.cinecircle.repository.EpisodeRepository.SeriesWithEpisodeCount;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -16,6 +17,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -27,6 +29,39 @@ import java.util.Set;
  */
 @Service
 public class EpisodeService {
+
+    public static class DashboardViewData {
+        private final List<SeriesTrackerSummary> trackedSeries;
+        private final List<SeriesTrackerSummary> untrackedSeries;
+        private final String activeStatus;
+        private final Map<String, Integer> statusCounts;
+
+        public DashboardViewData(List<SeriesTrackerSummary> trackedSeries,
+                                 List<SeriesTrackerSummary> untrackedSeries,
+                                 String activeStatus,
+                                 Map<String, Integer> statusCounts) {
+            this.trackedSeries = trackedSeries;
+            this.untrackedSeries = untrackedSeries;
+            this.activeStatus = activeStatus;
+            this.statusCounts = statusCounts;
+        }
+
+        public List<SeriesTrackerSummary> getTrackedSeries() {
+            return trackedSeries;
+        }
+
+        public List<SeriesTrackerSummary> getUntrackedSeries() {
+            return untrackedSeries;
+        }
+
+        public String getActiveStatus() {
+            return activeStatus;
+        }
+
+        public Map<String, Integer> getStatusCounts() {
+            return statusCounts;
+        }
+    }
 
     private static final String TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500";
     private static final Set<String> VALID_WATCH_STATUSES = Set.of("WATCHING", "ON_HOLD", "DROPPED", "COMPLETED");
@@ -167,14 +202,61 @@ public class EpisodeService {
         return "ALL";
     }
 
-    public Map<String, Integer> getStatusCounts(Long userId) {
-        Map<String, Integer> counts = new LinkedHashMap<>();
-        counts.put("ALL", 0);
-        counts.put("WATCHING", 0);
-        counts.put("ON_HOLD", 0);
-        counts.put("COMPLETED", 0);
-        counts.put("DROPPED", 0);
+    public DashboardViewData getDashboardData(Long userId, String statusFilter) {
+        String activeStatus = normalizeStatusFilter(statusFilter);
+        List<SeriesWithEpisodeCount> allSeriesWithCounts = episodeRepository.findAllSeriesWithEpisodeCounts();
 
+        Map<Long, MediaItem> seriesById = new HashMap<>(allSeriesWithCounts.size() * 2);
+        for (SeriesWithEpisodeCount entry : allSeriesWithCounts) {
+            seriesById.put(entry.series().getId(), entry.series());
+        }
+
+        List<EpisodeProgress> progressList = episodeRepository.findAllProgressByUserId(userId);
+        Map<String, Integer> statusCounts = createEmptyStatusCounts();
+        Set<Long> trackedSeriesIds = new LinkedHashSet<>();
+
+        for (EpisodeProgress progress : progressList) {
+            if (!seriesById.containsKey(progress.getSeriesMediaId())) {
+                continue;
+            }
+            trackedSeriesIds.add(progress.getSeriesMediaId());
+            statusCounts.put("ALL", statusCounts.get("ALL") + 1);
+            String normalizedStatus = normalizeWatchStatus(progress.getWatchStatus());
+            statusCounts.put(normalizedStatus, statusCounts.getOrDefault(normalizedStatus, 0) + 1);
+        }
+
+        Map<Long, List<Episode>> episodesBySeriesId = trackedSeriesIds.isEmpty()
+                ? Map.of()
+                : episodeRepository.findEpisodesBySeriesIds(trackedSeriesIds);
+
+        List<SeriesTrackerSummary> trackedSeries = new ArrayList<>();
+        for (EpisodeProgress progress : progressList) {
+            MediaItem series = seriesById.get(progress.getSeriesMediaId());
+            if (series == null) {
+                continue;
+            }
+            String normalizedStatus = normalizeWatchStatus(progress.getWatchStatus());
+            if (!"ALL".equals(activeStatus) && !normalizedStatus.equals(activeStatus)) {
+                continue;
+            }
+            List<Episode> episodes = episodesBySeriesId.getOrDefault(series.getId(), List.of());
+            trackedSeries.add(buildSeriesSummary(series, episodes, progress));
+        }
+
+        List<SeriesTrackerSummary> untrackedSeries = new ArrayList<>();
+        for (SeriesWithEpisodeCount entry : allSeriesWithCounts) {
+            MediaItem series = entry.series();
+            if (trackedSeriesIds.contains(series.getId())) {
+                continue;
+            }
+            untrackedSeries.add(buildUntrackedSummary(series, entry.episodeCount()));
+        }
+
+        return new DashboardViewData(trackedSeries, untrackedSeries, activeStatus, statusCounts);
+    }
+
+    public Map<String, Integer> getStatusCounts(Long userId) {
+        Map<String, Integer> counts = createEmptyStatusCounts();
         List<EpisodeProgress> progressList = episodeRepository.findAllProgressByUserId(userId);
         Map<Long, MediaItem> seriesMap = indexAllSeriesById();
 
@@ -190,44 +272,11 @@ public class EpisodeService {
     }
 
     public List<SeriesTrackerSummary> getTrackedSeries(Long userId, String statusFilter) {
-        String normalizedFilter = normalizeStatusFilter(statusFilter);
-        List<EpisodeProgress> progressList = episodeRepository.findAllProgressByUserId(userId);
-        Map<Long, MediaItem> seriesMap = indexAllSeriesById();
-
-        List<SeriesTrackerSummary> summaries = new ArrayList<>();
-        for (EpisodeProgress progress : progressList) {
-            MediaItem series = seriesMap.get(progress.getSeriesMediaId());
-            if (series == null) {
-                continue;
-            }
-            String normalizedStatus = normalizeWatchStatus(progress.getWatchStatus());
-            if (!"ALL".equals(normalizedFilter) && !normalizedStatus.equals(normalizedFilter)) {
-                continue;
-            }
-            List<Episode> episodes = episodeRepository.findEpisodesBySeriesId(series.getId());
-            summaries.add(buildSeriesSummary(series, episodes, progress));
-        }
-        return summaries;
+        return getDashboardData(userId, statusFilter).getTrackedSeries();
     }
 
     public List<SeriesTrackerSummary> getUntrackedSeries(Long userId) {
-        List<MediaItem> allSeries = episodeRepository.findAllSeries();
-        List<EpisodeProgress> trackedList = episodeRepository.findAllProgressByUserId(userId);
-
-        Map<Long, EpisodeProgress> trackedBySeriesId = new HashMap<>();
-        for (EpisodeProgress progress : trackedList) {
-            trackedBySeriesId.put(progress.getSeriesMediaId(), progress);
-        }
-
-        List<SeriesTrackerSummary> untracked = new ArrayList<>();
-        for (MediaItem series : allSeries) {
-            if (trackedBySeriesId.containsKey(series.getId())) {
-                continue;
-            }
-            List<Episode> episodes = episodeRepository.findEpisodesBySeriesId(series.getId());
-            untracked.add(buildSeriesSummary(series, episodes, null));
-        }
-        return untracked;
+        return getDashboardData(userId, "ALL").getUntrackedSeries();
     }
 
     public Optional<SeriesTrackerDetail> getSeriesDetail(Long userId, Long seriesId) {
@@ -254,21 +303,20 @@ public class EpisodeService {
     }
 
     public void startTracking(Long userId, Long seriesId) {
-        if (episodeRepository.findSeriesById(seriesId).isEmpty()) {
-            return;
-        }
-        if (episodeRepository.findProgressByUserAndSeries(userId, seriesId).isEmpty()) {
-            episodeRepository.upsertProgress(createDefaultProgress(userId, seriesId));
-        }
+        episodeRepository.insertProgressIfAbsent(userId, seriesId);
     }
 
     public void toggleEpisodeCheckpoint(Long userId, Long seriesId, int seasonNumber, int episodeNumber) {
-        if (episodeRepository.findSeriesById(seriesId).isEmpty()) {
-            return;
-        }
+        toggleEpisodeCheckpointAndGet(userId, seriesId, seasonNumber, episodeNumber);
+    }
+
+    public Optional<EpisodeProgress> toggleEpisodeCheckpointAndGet(Long userId,
+                                                                   Long seriesId,
+                                                                   int seasonNumber,
+                                                                   int episodeNumber) {
         List<Episode> episodes = episodeRepository.findEpisodesBySeriesId(seriesId);
         if (episodes.isEmpty()) {
-            return;
+            return Optional.empty();
         }
 
         int clickedIndex = -1;
@@ -280,7 +328,7 @@ public class EpisodeService {
             }
         }
         if (clickedIndex < 0) {
-            return;
+            return Optional.empty();
         }
 
         EpisodeProgress progress = episodeRepository.findProgressByUserAndSeries(userId, seriesId)
@@ -303,15 +351,17 @@ public class EpisodeService {
         }
 
         applyCheckpointAndSave(progress, episodes, newSeason, newEpisode);
+        return Optional.of(progress);
     }
 
     public void advanceNextEpisode(Long userId, Long seriesId) {
-        if (episodeRepository.findSeriesById(seriesId).isEmpty()) {
-            return;
-        }
+        advanceNextEpisodeAndGet(userId, seriesId);
+    }
+
+    public Optional<EpisodeProgress> advanceNextEpisodeAndGet(Long userId, Long seriesId) {
         List<Episode> episodes = episodeRepository.findEpisodesBySeriesId(seriesId);
         if (episodes.isEmpty()) {
-            return;
+            return Optional.empty();
         }
 
         EpisodeProgress progress = episodeRepository.findProgressByUserAndSeries(userId, seriesId)
@@ -319,35 +369,35 @@ public class EpisodeService {
 
         Episode nextEpisode = findNextEpisode(episodes, progress);
         if (nextEpisode == null) {
-            return;
+            return Optional.of(progress);
         }
 
         applyCheckpointAndSave(progress, episodes, nextEpisode.getSeasonNumber(), nextEpisode.getEpisodeNumber());
+        return Optional.of(progress);
     }
 
     public void updateStatusAndTargetDate(Long userId, Long seriesId, String watchStatus, LocalDate targetFinishDate) {
-        if (episodeRepository.findSeriesById(seriesId).isEmpty()) {
-            return;
-        }
-        EpisodeProgress progress = episodeRepository.findProgressByUserAndSeries(userId, seriesId)
-                .orElseGet(() -> createDefaultProgress(userId, seriesId));
+        updateSettingsIfSeriesExists(userId, seriesId, watchStatus, targetFinishDate);
+    }
 
-        progress.setWatchStatus(normalizeWatchStatus(watchStatus));
-        progress.setTargetFinishDate(targetFinishDate);
-        episodeRepository.upsertProgress(progress);
+    public boolean updateSettingsIfSeriesExists(Long userId,
+                                                Long seriesId,
+                                                String watchStatus,
+                                                LocalDate targetFinishDate) {
+        return episodeRepository.upsertSettings(
+                userId,
+                seriesId,
+                normalizeWatchStatus(watchStatus),
+                targetFinishDate
+        ) > 0;
     }
 
     public void resetProgress(Long userId, Long seriesId) {
-        if (episodeRepository.findSeriesById(seriesId).isEmpty()) {
-            return;
-        }
-        EpisodeProgress progress = episodeRepository.findProgressByUserAndSeries(userId, seriesId)
-                .orElseGet(() -> createDefaultProgress(userId, seriesId));
+        resetProgressIfSeriesExists(userId, seriesId);
+    }
 
-        progress.setHighestSeason(1);
-        progress.setHighestEpisode(0);
-        progress.setWatchStatus("WATCHING");
-        episodeRepository.upsertProgress(progress);
+    public boolean resetProgressIfSeriesExists(Long userId, Long seriesId) {
+        return episodeRepository.resetProgressIfSeriesExists(userId, seriesId) > 0;
     }
 
     public void removeTracking(Long userId, Long seriesId) {
@@ -388,6 +438,36 @@ public class EpisodeService {
         summary.setStats(calculateStats(episodes, progress));
         summary.setNextEpisode(findNextEpisode(episodes, progress));
         return summary;
+    }
+
+    private SeriesTrackerSummary buildUntrackedSummary(MediaItem series, int episodeCount) {
+        BingePaceStats stats = new BingePaceStats();
+        stats.setTotalEpisodes(episodeCount);
+        stats.setRemainingEpisodes(episodeCount);
+        stats.setCompletionPercent(0);
+        stats.setFormattedRemainingTime("0m");
+        stats.setFormattedDailyTime("0m/day");
+        stats.setPaceSummaryLabel(episodeCount > 0
+                ? "Start tracking to calculate pace"
+                : "Sync episodes to calculate pace");
+
+        SeriesTrackerSummary summary = new SeriesTrackerSummary();
+        summary.setSeries(series);
+        summary.setResolvedPosterUrl(resolvePosterUrl(series.getPosterPath()));
+        summary.setProgress(null);
+        summary.setStats(stats);
+        summary.setNextEpisode(null);
+        return summary;
+    }
+
+    private Map<String, Integer> createEmptyStatusCounts() {
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        counts.put("ALL", 0);
+        counts.put("WATCHING", 0);
+        counts.put("ON_HOLD", 0);
+        counts.put("COMPLETED", 0);
+        counts.put("DROPPED", 0);
+        return counts;
     }
 
     private List<SeasonGroup> buildSeasonGroups(List<Episode> episodes, EpisodeProgress progress) {
