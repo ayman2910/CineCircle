@@ -1,7 +1,11 @@
 package com.cinecircle.model;
 
 import java.time.LocalDate;
+import java.util.Locale;
 
+/**
+ * Plain POJO representing a user's series checkpoint and watch status in {@code episode_progress}.
+ */
 public class EpisodeProgress {
     private Long id;
     private Long userId;
@@ -10,6 +14,9 @@ public class EpisodeProgress {
     private int highestEpisode;
     private String watchStatus;
     private LocalDate targetFinishDate;
+
+    public EpisodeProgress() {
+    }
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -31,4 +38,14 @@ public class EpisodeProgress {
 
     public LocalDate getTargetFinishDate() { return targetFinishDate; }
     public void setTargetFinishDate(LocalDate targetFinishDate) { this.targetFinishDate = targetFinishDate; }
+
+    /**
+     * Returns {@code "Not started"} before the first logged episode, otherwise {@code S01E01}.
+     */
+    public String getCheckpointLabel() {
+        if (highestSeason <= 1 && highestEpisode == 0) {
+            return "Not started";
+        }
+        return String.format(Locale.ROOT, "S%02dE%02d", highestSeason, highestEpisode);
+    }
 }
