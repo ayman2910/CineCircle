@@ -2,30 +2,128 @@
 <html xmlns:th="http://www.thymeleaf.org"
       xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <body>
-<nav th:fragment="navbar" class="navbar">
-    <div class="nav-brand">
-        <a th:href="@{/}">CineCircle</a>
-    </div>
-    <ul class="nav-links">
-        <li><a th:href="@{/}">Catalog</a></li>
-        <li><a th:href="@{/recommender}">Tonight's Pick</a></li>
-        <li><a th:href="@{/watchlist}">Watchlist</a></li>
-        <li><a th:href="@{/lobby}">Group Lobby</a></li>
-        <li><a th:href="@{/clubs}">Clubs</a></li>
-        <li><a th:href="@{/stats}">Watch-Wrapped</a></li>
-    </ul>
-    <div class="nav-auth">
-        <span sec:authorize="isAuthenticated()" class="user-badge">
-            <span sec:authentication="name"></span>
-            <form th:action="@{/logout}" method="post" style="display:inline;">
-                <button type="submit" class="btn-outline">Logout</button>
+<div th:fragment="navbar" class="cc-nav-shell">
+    <nav class="navbar">
+        <div class="nav-brand">
+            <button type="button"
+                    id="ccSidebarToggle"
+                    class="cc-nav-toggle"
+                    sec:authorize="isAuthenticated()"
+                    aria-controls="ccSidebar"
+                    aria-expanded="false"
+                    aria-label="Open navigation menu">
+                <span class="cc-nav-toggle-bars" aria-hidden="true">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </span>
+            </button>
+            <a th:href="@{/}">CineCircle</a>
+        </div>
+        <ul class="nav-links">
+            <li><a th:href="@{/}">Catalog</a></li>
+            <li sec:authorize="isAuthenticated()"><a th:href="@{/episodes}">Episodes</a></li>
+            <li><a th:href="@{/recommender}">Tonight's Pick</a></li>
+            <li><a th:href="@{/watchlist}">Watchlist</a></li>
+            <li><a th:href="@{/lobby}">Group Lobby</a></li>
+            <li><a th:href="@{/clubs}">Clubs</a></li>
+            <li><a th:href="@{/stats}">Watch-Wrapped</a></li>
+        </ul>
+        <div class="nav-auth">
+            <span sec:authorize="isAuthenticated()" class="user-badge">
+                <span sec:authentication="name"></span>
+                <form th:action="@{/logout}" method="post" style="display:inline;">
+                    <button type="submit" class="btn-outline">Logout</button>
+                </form>
+            </span>
+            <span sec:authorize="isAnonymous()">
+                <a th:href="@{/login}" class="btn-primary">Login</a>
+                <a th:href="@{/register}" class="btn-outline">Sign Up</a>
+            </span>
+        </div>
+    </nav>
+
+    <div id="ccSidebarBackdrop"
+         class="cc-sidebar-backdrop"
+         sec:authorize="isAuthenticated()"
+         aria-hidden="true"></div>
+
+    <aside id="ccSidebar"
+           class="cc-sidebar"
+           sec:authorize="isAuthenticated()"
+           aria-label="CineCircle Navigation"
+           aria-hidden="true">
+        <div class="cc-sidebar-header">
+            <div class="cc-sidebar-identity">
+                <span class="cc-sidebar-brand">CineCircle</span>
+                <span class="cc-sidebar-user" sec:authentication="name">user@cinecircle.com</span>
+            </div>
+            <button type="button"
+                    id="ccSidebarClose"
+                    class="cc-sidebar-close"
+                    aria-label="Close navigation menu">&times;</button>
+        </div>
+
+        <nav class="cc-sidebar-nav" aria-label="CineCircle feature sections">
+            <details class="cc-sidebar-group" open>
+                <summary class="cc-sidebar-group-title">Explore &amp; Discovery</summary>
+                <ul class="cc-sidebar-list">
+                    <li><a th:href="@{/}" class="cc-sidebar-link"><span>Home</span></a></li>
+                    <li><a th:href="@{/tmdb/search}" class="cc-sidebar-link"><span>Search &amp; Import TMDB</span></a></li>
+                    <li><a th:href="@{/catalog}" class="cc-sidebar-link"><span>Catalog</span></a></li>
+                    <li><a th:href="@{/platforms}" class="cc-sidebar-link"><span>Where to Watch</span></a></li>
+                    <li><a th:href="@{/tonights-pick}" class="cc-sidebar-link"><span>Tonight's Pick</span></a></li>
+                    <li><a th:href="@{/watchlist}" class="cc-sidebar-link"><span>Smart Watchlist</span></a></li>
+                    <li><a th:href="@{/franchises}" class="cc-sidebar-link"><span>Franchise Guides</span></a></li>
+                </ul>
+            </details>
+
+            <details class="cc-sidebar-group" open>
+                <summary class="cc-sidebar-group-title">Tracking &amp; Reviews</summary>
+                <ul class="cc-sidebar-list">
+                    <li>
+                        <a th:href="@{/episodes}" class="cc-sidebar-link">
+                            <span>Episode Tracker</span>
+                            <span class="cc-sidebar-pill">Live</span>
+                        </a>
+                    </li>
+                    <li><a th:href="@{/reviews}" class="cc-sidebar-link"><span>Ratings &amp; Reviews</span></a></li>
+                    <li><a th:href="@{/diary}" class="cc-sidebar-link"><span>Watch Diary</span></a></li>
+                    <li><a th:href="@{/lists}" class="cc-sidebar-link"><span>Ranked &amp; Tier Lists</span></a></li>
+                    <li><a th:href="@{/watch-wrapped}" class="cc-sidebar-link"><span>Watch-Wrapped</span></a></li>
+                </ul>
+            </details>
+
+            <details class="cc-sidebar-group" open>
+                <summary class="cc-sidebar-group-title">Social &amp; Watch-Party</summary>
+                <ul class="cc-sidebar-list">
+                    <li><a th:href="@{/taste-match}" class="cc-sidebar-link"><span>Taste-Match</span></a></li>
+                    <li><a th:href="@{/lobby}" class="cc-sidebar-link"><span>Group Picker Lobby</span></a></li>
+                    <li><a th:href="@{/social}" class="cc-sidebar-link"><span>Friend Feed &amp; Requests</span></a></li>
+                    <li><a th:href="@{/buddy-watch}" class="cc-sidebar-link"><span>Buddy-Watch</span></a></li>
+                    <li><a th:href="@{/advisories}" class="cc-sidebar-link"><span>Family Advisories</span></a></li>
+                </ul>
+            </details>
+
+            <details class="cc-sidebar-group" open>
+                <summary class="cc-sidebar-group-title">Community &amp; Clubs</summary>
+                <ul class="cc-sidebar-list">
+                    <li><a th:href="@{/discussions}" class="cc-sidebar-link"><span>Spoiler-Safe Discussions</span></a></li>
+                    <li><a th:href="@{/clubs}" class="cc-sidebar-link"><span>Movie Clubs</span></a></li>
+                    <li><a th:href="@{/brackets}" class="cc-sidebar-link"><span>Showdown Brackets</span></a></li>
+                    <li><a th:href="@{/challenges}" class="cc-sidebar-link"><span>Watch Challenges</span></a></li>
+                </ul>
+            </details>
+        </nav>
+
+        <div class="cc-sidebar-footer">
+            <form th:action="@{/logout}" method="post" class="cc-sidebar-logout-form">
+                <button type="submit" class="cc-sidebar-logout-btn">Logout</button>
             </form>
-        </span>
-        <span sec:authorize="isAnonymous()">
-            <a th:href="@{/login}" class="btn-primary">Login</a>
-            <a th:href="@{/register}" class="btn-outline">Sign Up</a>
-        </span>
-    </div>
-</nav>
+        </div>
+    </aside>
+
+    <script th:src="@{/js/sidebar.js}" defer></script>
+</div>
 </body>
 </html>
